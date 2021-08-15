@@ -1,3 +1,16 @@
+""""""""""""""""""""""""""""""""""""CopyToClipboard""""""""""""""""""""""""""""""""""""
+
+"WSL yank support
+let s:clip = '/mnt/c/Windows/System32/clip.exe'  " change this path according to your mount point
+if executable(s:clip)
+    augroup WSLYank
+        autocmd!
+		autocmd TextYankPost * if v:event.operator ==# 'y' && v:event.regname ==# '' | call system('cat |' . s:clip, @0) | endif
+    augroup END
+endif
+
+""""""""""""""""""""""""""""""""""""CopyToClipboard""""""""""""""""""""""""""""""""""""
+
 """"""""""""""""""""""""""""""""""""KeyMaps""""""""""""""""""""""""""""""""""""
 
 let mapleader = " "
@@ -31,8 +44,8 @@ set wildmenu
 
 set wildignore+=**/node_modules/**
 
-set tabstop=4 softtabstop=4
-set shiftwidth=4
+set tabstop=2 softtabstop=2
+set shiftwidth=2
 set expandtab
 set smartindent
 set nowrap
@@ -45,17 +58,16 @@ call plug#begin('~/.vim/plugged')
 
 Plug 'tpope/vim-commentary'
 Plug 'tpope/vim-surround'
+Plug 'tpope/vim-repeat'
 Plug 'sheerun/vim-polyglot'
-Plug 'mhartington/oceanic-next'
+Plug 'morhetz/gruvbox'
 Plug 'itchyny/lightline.vim'
 Plug 'tpope/vim-fugitive'
+Plug 'airblade/vim-gitgutter'
 Plug 'preservim/nerdtree'
 Plug 'jiangmiao/auto-pairs'
 Plug 'neoclide/coc.nvim', {'branch': 'release'}
 Plug 'matze/vim-move'
-
-":CocInstall coc-emmet coc-eslint coc-html-css-support coc-json
-"coc-tailwindcss coc-tsserver coc-git
 
 call plug#end()
 
@@ -63,33 +75,39 @@ call plug#end()
 
 """"""""""""""""""""""""""""""""""""ColorScheme""""""""""""""""""""""""""""""""""""
 
-let g:oceanic_next_terminal_bold = 1
-let g:oceanic_next_terminal_italic = 1
-colorscheme OceanicNext
-
-hi Normal guibg=NONE ctermbg=NONE
-hi LineNr guibg=NONE ctermbg=NONE
-hi SignColumn guibg=NONE ctermbg=NONE
-hi EndOfBuffer guibg=NONE ctermbg=NONE
+autocmd vimenter * ++nested colorscheme gruvbox
+set background=dark
 
 """"""""""""""""""""""""""""""""""""ColorScheme""""""""""""""""""""""""""""""""""""
 
 """"""""""""""""""""""""""""""""""""StatusLine""""""""""""""""""""""""""""""""""""
 
+set laststatus=2
+
 let g:lightline = {
-        \ 'active': {
-        \   'left': [
-        \               [ 'mode', 'paste' ],
-        \     [ 'gitbranch', 'readonly', 'filename', 'modified' ],
-        \       ],
-        \       'right':[
-  \     [ 'filetype', 'fileencoding', 'lineinfo', 'percent' ],
-  \   ],
-        \ },
-        \ 'component_function': {
-        \   'gitbranch': 'FugitiveStatusline',
-        \ },
-        \ }
+	\ 'active': {
+	\   'left': [ 
+	\ 		[ 'mode', 'paste' ],
+	\		  [ 'gitbranch','gitstatus', 'cocstatus', 'readonly', 'filename', 'modified' ], 
+	\ 	],
+	\ 	'right':[
+	\		  [ 'filetype', 'fileencoding', 'lineinfo', 'percent' ],
+	\   ],
+	\ },
+	\ 'component_function': {
+	\   'gitbranch': 'FugitiveStatusline',
+	\	  'cocstatus': 'coc#status',
+  \   'gitstatus': 'GitStatus',
+	\ },
+	\ }
+
+" Use autocmd to force lightline update.
+autocmd User CocStatusChange,CocDiagnosticChange call lightline#update()
+
+function! GitStatus()
+  let [a,m,r] = GitGutterGetHunkSummary()
+  return printf('+%d ~%d -%d', a, m, r)
+endfunction
 
 """"""""""""""""""""""""""""""""""""StatusLine""""""""""""""""""""""""""""""""""""
 
@@ -103,14 +121,14 @@ let g:lightline = {
 " Recent versions of xterm (282 or above) also support
 " 5 -> blinking vertical bar
 " 6 -> solid vertical bar
-
+    
 if &term =~ '^xterm'
-        " normal mode
-        let &t_EI .= "\<Esc>[0 q"
-        " insert mode
-        let &t_SI .= "\<Esc>[5 q"
-        " replace mode
-        let &t_SR .= "\<Esc>[4 q"
+	" normal mode
+	let &t_EI .= "\<Esc>[0 q"
+	" insert mode
+	let &t_SI .= "\<Esc>[5 q"
+	" replace mode
+	let &t_SR .= "\<Esc>[4 q"
 endif
 
 """"""""""""""""""""""""""""""""""""Cursor""""""""""""""""""""""""""""""""""""
@@ -133,15 +151,17 @@ set nowritebackup
 set updatetime=300
 
 let g:coc_filetype_map = {'javascript': 'javascriptreact'}
+let g:coc_global_extensions = ['coc-json', 'coc-prettier', 'coc-clangd',
+	\	'coc-tsserver', 'coc-tailwindcss', 'coc-eslint']
 
 " Always show the signcolumn, otherwise it would shift the text each time
 " diagnostics appear/become resolved.
-if has("nvim-0.5.0") || has("patch-8.1.1564")
+" if has("nvim-0.5.0") || has("patch-8.1.1564")
   " Recently vim can merge signcolumn and number column into one
-  set signcolumn=number
-else
-  set signcolumn=yes
-endif
+  " set signcolumn=number
+" else
+set signcolumn=yes
+" endif
 
 " Use <c-space> to trigger completion.
 if has('nvim')
@@ -180,8 +200,13 @@ autocmd CursorHold * silent call CocActionAsync('highlight')
 " Symbol renaming.
 nmap <leader>rn <Plug>(coc-rename)
 
-" Remap keys for applying codeAction to the current buffer.
-nmap <leader>a  <Plug>(coc-codeaction)
+" Applying codeAction to the selected region.
+" Example: `<leader>aap` for current paragraph
+xmap <leader>a  <Plug>(coc-codeaction-selected)
+nmap <leader>a  <Plug>(coc-codeaction-selected)
+
+" Apply AutoFix to problem on the current line.
+nmap <leader>qf  <Plug>(coc-fix-current)
 
 " Remap <C-f> and <C-b> for scroll float windows/popups.
 if has('nvim-0.4.0') || has('patch-8.2.0750')
